@@ -9,12 +9,36 @@ import {
   SensitiveDataFilter,
 } from '@mastra/observability';
 import { agent } from './agents/agent';
+import { classificationAgent } from './agents/classification-agent';
+import { componentAgent } from './agents/component-agent';
+import { layoutAgent } from './agents/layout-agent';
+import { motionAgent } from './agents/motion-agent';
+import { visualStyleAgent } from './agents/visual-style-agent';
 import { startScheduleTool, stopScheduleTool } from './tools/schedule-tools';
 import { webFetchTool } from './tools/web-fetch-tool';
+import { extractColorThemeTool } from './tools/extract-color-theme-tool';
+import { extractTypographyTool } from './tools/extract-typography-tool';
+import { repositoryInspectorTool } from './tools/repository-inspector-tool';
+import { frontendAnalysisWorkflow } from './workflows/frontend-analysis-workflow';
 
 export const mastra = new Mastra({
-  agents: { agent },
-  tools: { startScheduleTool, stopScheduleTool, webFetchTool },
+  agents: {
+    agent,
+    classificationAgent,
+    componentAgent,
+    layoutAgent,
+    motionAgent,
+    visualStyleAgent,
+  },
+  workflows: { frontendAnalysisWorkflow },
+  tools: {
+    startScheduleTool,
+    stopScheduleTool,
+    webFetchTool,
+    extractColorThemeTool,
+    extractTypographyTool,
+    repositoryInspectorTool,
+  },
   storage: new MastraCompositeStore({
     id: 'composite-storage',
     default: new LibSQLStore({
