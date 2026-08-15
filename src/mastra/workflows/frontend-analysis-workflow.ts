@@ -21,8 +21,8 @@ const repositoryFileSchema = z.object({
   content: z.string(),
 });
 
-const MAX_FILE_CONTENT_CHARS = 30_000;
-const MAX_ANALYSIS_CONTEXT_CHARS = 120_000;
+const MAX_FILE_CONTENT_CHARS = 8_000;
+const MAX_ANALYSIS_CONTEXT_CHARS = 24_000;
 
 const toolObserve = {
   span: async <T>(
@@ -52,6 +52,23 @@ function buildAnalysisFiles(
 
     return [{ path: file.path, content }];
   });
+}
+
+function prioritizeAnalysisFiles(
+  files: Array<{ path: string; content: string }>,
+  projectContext: z.infer<typeof projectContextSchema>,
+) {
+  const priorities = new Map<string, number>();
+  for (const path of projectContext.relevantFiles.components) priorities.set(path, 3);
+  for (const path of projectContext.relevantFiles.pages) priorities.set(path, 2);
+  for (const path of projectContext.relevantFiles.styles) priorities.set(path, 1);
+  for (const path of projectContext.relevantFiles.themes) priorities.set(path, 0);
+
+  return [...files].sort(
+    (left, right) =>
+      (priorities.get(left.path) ?? 4) - (priorities.get(right.path) ?? 4) ||
+      left.path.localeCompare(right.path),
+  );
 }
 
 export const repositoryInputSchema = z.object({
@@ -141,7 +158,9 @@ const extractDesignDataStep = createStep({
 
     return {
       projectContext,
-      files: buildAnalysisFiles(filesForExtraction),
+      files: buildAnalysisFiles(
+        prioritizeAnalysisFiles(filesForExtraction, projectContext),
+      ),
       typography,
       colors,
     };
