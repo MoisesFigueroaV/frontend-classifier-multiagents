@@ -90,6 +90,15 @@ Do not:
 - generate the final frontend classification
 - generate the UI skill
 - write or modify project files
+
+Structured output contract:
+Return every required field inside the structured object, with no free-form text
+outside it: componentFamilies; shapeLanguage { dominantRadius, commonShapes };
+borders { usage, styles }; shadows { usage, styles }; variants; interactionStates;
+consistency; reuseLevel; patterns [{ name, description }]; evidence [{ observation,
+sources }]; and a mandatory non-empty reasoningSummary. Never omit a field; when
+evidence is limited, use the appropriate enum and explain the limitation in
+reasoningSummary.
 `,
   model: agentModel,
 });

@@ -126,6 +126,14 @@ Do not:
 - generate the final frontend classification
 - generate the UI skill
 - write or modify project files
+
+Structured output contract:
+Return every required field inside the structured object, with no free-form text
+outside it: transitionDurations { commonValues, dominantRange }; easing
+{ commonValues, dominantStyle }; hoverEffects; entranceAnimations; exitAnimations;
+microInteractions; transformPatterns; scrollEffects; motionIntensity; motionStyle;
+consistency; patterns [{ name, description }]; evidence [{ observation, sources }];
+and a mandatory non-empty reasoningSummary. Never omit a field.
 `,
 
   model: agentModel,

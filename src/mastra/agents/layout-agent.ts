@@ -113,6 +113,14 @@ Do not:
 - generate the final frontend classification
 - generate the UI skill
 - write or modify project files
+
+Structured output contract:
+Return every required field inside the structured object, with no free-form text
+outside it: pageStructure { dominantType, sectionFlow }; contentDensity; spacing
+{ overall, consistency }; hierarchy { strength, techniques }; alignment { dominant,
+consistency }; navigationPatterns; responsiveBehavior { confidence, patterns };
+compositionPatterns [{ name, description }]; consistency; evidence [{ observation,
+sources }]; and a mandatory non-empty reasoningSummary. Never omit a field.
 `,
 
   model: agentModel,
