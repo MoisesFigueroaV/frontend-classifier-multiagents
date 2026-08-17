@@ -11,5 +11,6 @@ src/mastra/public/
 .netlify
 .vercel
 .frontend-classifier-cache
+artifacts/
 *.duckdb
 *.duckdb.wal
