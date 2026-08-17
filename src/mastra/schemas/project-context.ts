@@ -24,6 +24,7 @@ export const projectContextSchema = z.object({
   }),
 
   relevantFiles: z.object({
+    frontend: z.array(z.string()),
     components: z.array(z.string()),
     pages: z.array(z.string()),
     styles: z.array(z.string()),

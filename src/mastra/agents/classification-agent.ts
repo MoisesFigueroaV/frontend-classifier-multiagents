@@ -1,4 +1,5 @@
 import { Agent } from '@mastra/core/agent';
+import { agentModel } from '../lib/model-provider';
 
 export const classificationAgent = new Agent({
   id: 'classification-agent',
@@ -21,5 +22,5 @@ Rules:
   that limitation in overallSummary instead of fabricating details.
 - Do not write files or call tools.
 `,
-  model: 'google/gemini-3.5-flash',
+  model: agentModel,
 });

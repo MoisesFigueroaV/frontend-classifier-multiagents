@@ -1,8 +1,23 @@
 import { createInterface } from 'node:readline/promises';
 import { stdin as inputStream, stdout as outputStream } from 'node:process';
+import { resolve } from 'node:path';
 
-import { loadLocalRepository } from './repository/load-local-repository';
+import { loadLocalRepository, resolveLocalRepositoryPath } from './repository/load-local-repository';
 import { runFrontendAnalysis } from './runners/run-frontend-analysis';
+import { buildClassificationJson } from './artifacts/build-classification-json';
+import { buildDesignReport } from './artifacts/build-design-report';
+import { buildUiSkill } from './artifacts/build-ui-skill';
+import type { ArtifactBuilder, ArtifactKind } from './artifacts/artifact-types';
+import { writeArtifacts } from './artifacts/write-artifacts';
+import { selectArtifacts } from './prompts/select-artifacts';
+import { selectOutputDirectory } from './prompts/select-output-directory';
+import { formatTokenUsageSummary } from '../mastra/lib/token-usage';
+
+const artifactBuilders: Record<ArtifactKind, ArtifactBuilder> = {
+  classification: buildClassificationJson,
+  uiSkill: buildUiSkill,
+  designReport: buildDesignReport,
+};
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
@@ -33,20 +48,25 @@ async function main() {
   const repositoryPath = (
     await readline.question('¿Dónde está el proyecto? (ruta o frase)\n> ')
   ).trim();
-  readline.close();
 
   if (!repositoryPath) {
+    readline.close();
     throw new Error('A repository path is required.');
   }
 
-  const snapshot = await loadLocalRepository(repositoryPath);
+  const [snapshot, repositoryDirectory] = await Promise.all([
+    loadLocalRepository(repositoryPath),
+    resolveLocalRepositoryPath(repositoryPath),
+  ]);
   outputStream.write(
     `\nEncontrados ${snapshot.files.length.toString()} archivos.\nAnalizando...\n`,
   );
 
-  const result = await runFrontendAnalysis(snapshot);
+  const analysisRun = await runFrontendAnalysis(snapshot);
+  const result = analysisRun.workflowResult;
 
   if (result.status !== 'success') {
+    outputStream.write(`\n${formatTokenUsageSummary(analysisRun.tokenUsage)}\n`);
     if (result.status === 'failed') {
       throw new Error(getErrorMessage(result.error));
     }
@@ -63,6 +83,34 @@ async function main() {
   outputStream.write('✓ Classification\n');
   outputStream.write('\nAnálisis completado.\n');
   outputStream.write(`${result.result.overallSummary}\n`);
+  outputStream.write(`\n${formatTokenUsageSummary(analysisRun.tokenUsage)}\n`);
+
+  const selectedArtifacts = await selectArtifacts(readline);
+  const defaultDirectory = resolve(process.cwd(), 'artifacts', snapshot.projectName);
+  const outputDirectory = await selectOutputDirectory(readline, {
+    defaultDirectory,
+    repositoryDirectory,
+  });
+  readline.close();
+
+  const artifacts = selectedArtifacts.map((kind) =>
+    artifactBuilders[kind](result.result),
+  );
+  const writeResult = await writeArtifacts(outputDirectory, artifacts);
+
+  if (writeResult.created.length > 0) {
+    outputStream.write('\n✓ Archivos creados:\n');
+    for (const filePath of writeResult.created) {
+      outputStream.write(`  ${filePath}\n`);
+    }
+  }
+
+  if (writeResult.failed.length > 0) {
+    outputStream.write('\nNo se pudieron escribir algunos artefactos; el análisis sigue disponible en esta ejecución.\n');
+    for (const failure of writeResult.failed) {
+      outputStream.write(`  ${failure.fileName}: ${failure.message}\n`);
+    }
+  }
 }
 
 main().catch((error: unknown) => {

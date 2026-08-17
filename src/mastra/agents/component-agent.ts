@@ -1,6 +1,7 @@
 // src/mastra/agents/component-agent.ts
 
 import { Agent } from '@mastra/core/agent';
+import { agentModel } from '../lib/model-provider';
 
 export const componentAgent = new Agent({
   id: 'component-agent',
@@ -90,5 +91,5 @@ Do not:
 - generate the UI skill
 - write or modify project files
 `,
-  model: 'google/gemini-3.5-flash',
+  model: agentModel,
 });

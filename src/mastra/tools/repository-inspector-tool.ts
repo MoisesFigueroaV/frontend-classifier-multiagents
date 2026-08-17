@@ -10,6 +10,56 @@ const repositoryFileSchema = z.object({
   content: z.string(),
 });
 
+const FRONTEND_FILE_PATTERN =
+  /\.(?:astro|css|html|jsx|less|sass|scss|svelte|tsx|vue)$|\.(?:ts|js|mjs|cjs)$/i;
+const FRONTEND_DEPENDENCIES = new Set([
+  '@angular/core',
+  '@remix-run/react',
+  '@solidjs/router',
+  'astro',
+  'next',
+  'react',
+  'solid-js',
+  'svelte',
+  'vue',
+]);
+const NON_UI_PACKAGE_DIRECTORY_PATTERN =
+  /(?:^|\/)(?:api|backend|database|email|notifications?|server)(?:\/|$)/i;
+
+type PackageInfo = {
+  directory: string;
+  dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
+};
+
+function isFrontendPackage(packageInfo: PackageInfo) {
+  if (NON_UI_PACKAGE_DIRECTORY_PATTERN.test(packageInfo.directory)) {
+    return false;
+  }
+
+  const dependencies = {
+    ...packageInfo.dependencies,
+    ...packageInfo.devDependencies,
+  };
+
+  return Object.keys(dependencies).some((dependency) =>
+    FRONTEND_DEPENDENCIES.has(dependency),
+  );
+}
+
+function isWithinPackage(
+  path: string,
+  directory: string,
+  packageDirectories: string[],
+) {
+  if (directory.length > 0) return path.startsWith(directory);
+
+  return !packageDirectories.some(
+    (nestedDirectory) =>
+      nestedDirectory.length > 0 && path.startsWith(nestedDirectory),
+  );
+}
+
 export const repositoryInspectorTool = createTool({
   id: 'repository-inspector',
 
@@ -24,23 +74,53 @@ export const repositoryInspectorTool = createTool({
   outputSchema: projectContextSchema,
 
   execute: async ({ projectName, files }) => {
-    const packageJsonFile = files.find(
-      (file) => file.path === 'package.json',
+    const filePaths = files.map((file) => file.path);
+    const packageJsonFiles = files.filter((file) =>
+      file.path.endsWith('package.json'),
     );
 
-    let dependencies: Record<string, string> = {};
-    let devDependencies: Record<string, string> = {};
+    const packageInfos: PackageInfo[] = [];
 
-    if (packageJsonFile) {
+    for (const packageJsonFile of packageJsonFiles) {
       try {
         const packageJson = JSON.parse(packageJsonFile.content);
 
-        dependencies = packageJson.dependencies ?? {};
-        devDependencies = packageJson.devDependencies ?? {};
+        packageInfos.push({
+          directory: packageJsonFile.path.slice(0, -'package.json'.length),
+          dependencies: packageJson.dependencies ?? {},
+          devDependencies: packageJson.devDependencies ?? {},
+        });
       } catch {
-        // Dejamos las dependencias vacías si package.json no es válido.
+        // Ignoramos package.json no válidos.
       }
     }
+
+    const frontendPackages = packageInfos.filter(isFrontendPackage);
+    const frontendFiles = filePaths.filter(
+      (path) =>
+        FRONTEND_FILE_PATTERN.test(path) &&
+        frontendPackages.some((packageInfo) =>
+          isWithinPackage(
+            path,
+            packageInfo.directory,
+            packageInfos.map((candidate) => candidate.directory),
+          ),
+        ),
+    );
+
+    const selectedPackages =
+      frontendPackages.length > 0
+        ? frontendPackages
+        : packageInfos.filter((packageInfo) => packageInfo.directory.length === 0);
+
+    const dependencies = Object.assign(
+      {},
+      ...selectedPackages.map((packageInfo) => packageInfo.dependencies),
+    ) as Record<string, string>;
+    const devDependencies = Object.assign(
+      {},
+      ...selectedPackages.map((packageInfo) => packageInfo.devDependencies),
+    ) as Record<string, string>;
 
     const allDependencies = {
       ...dependencies,
@@ -112,25 +192,23 @@ export const repositoryInspectorTool = createTool({
         ].includes(name),
     );
 
-    const filePaths = files.map((file) => file.path);
-
-    const componentFiles = filePaths.filter(
+    const componentFiles = frontendFiles.filter(
       (path) =>
         /components?/i.test(path) &&
         /\.(tsx|jsx|vue|svelte)$/.test(path),
     );
 
-    const pageFiles = filePaths.filter(
+    const pageFiles = frontendFiles.filter(
       (path) =>
         /(pages?|app|routes?)/i.test(path) &&
         /\.(tsx|jsx|vue|svelte)$/.test(path),
     );
 
-    const styleFiles = filePaths.filter((path) =>
+    const styleFiles = frontendFiles.filter((path) =>
       /\.(css|scss|sass|less)$/.test(path),
     );
 
-    const themeFiles = filePaths.filter((path) =>
+    const themeFiles = frontendFiles.filter((path) =>
       /(theme|tokens?|variables)/i.test(path),
     );
 
@@ -173,6 +251,7 @@ export const repositoryInspectorTool = createTool({
       },
 
       relevantFiles: {
+        frontend: frontendFiles,
         components: componentFiles,
         pages: pageFiles,
         styles: styleFiles,

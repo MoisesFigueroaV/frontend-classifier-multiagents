@@ -1,5 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import { visualStyleAnalysisSchema } from '../schemas/visual-style';
+import { agentModel } from '../lib/model-provider';
 
 export const visualStyleAgent = new Agent({
   id: 'visual-style-agent',
@@ -51,5 +52,5 @@ These are examples, not a closed taxonomy.
 Always provide evidence that explains why the frontend received its classification.
 `,
 
-  model: 'google/gemini-3.5-flash',
+  model: agentModel,
 });

@@ -1,6 +1,7 @@
 // src/mastra/agents/layout-agent.ts
 
 import { Agent } from '@mastra/core/agent';
+import { agentModel } from '../lib/model-provider';
 
 export const layoutAgent = new Agent({
   id: 'layout-agent',
@@ -114,5 +115,5 @@ Do not:
 - write or modify project files
 `,
 
-  model: 'google/gemini-3.5-flash',
+  model: agentModel,
 });

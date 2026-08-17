@@ -8,15 +8,60 @@ import type {
 } from './repository-snapshot';
 
 const IGNORED_DIRECTORIES = new Set([
+  '.cache',
   '.git',
   '.next',
+  '.nuxt',
+  '.output',
+  '.turbo',
+  '.vercel',
+  '.vite',
+  '.yarn',
   'build',
   'coverage',
   'dist',
   'node_modules',
+  'storybook-static',
 ]);
 const MAX_FILE_SIZE_BYTES = 1_000_000;
-const MAX_FILES = 2_000;
+const MAX_FILES = 5_000;
+
+const FRONTEND_EXTENSIONS = new Set([
+  '.astro',
+  '.css',
+  '.html',
+  '.jsx',
+  '.less',
+  '.sass',
+  '.scss',
+  '.svelte',
+  '.tsx',
+  '.vue',
+]);
+const ROOT_CONFIGURATION_FILES = new Set([
+  'package.json',
+  'next.config.js',
+  'next.config.mjs',
+  'next.config.ts',
+  'nuxt.config.ts',
+  'postcss.config.cjs',
+  'postcss.config.js',
+  'postcss.config.mjs',
+  'tailwind.config.cjs',
+  'tailwind.config.js',
+  'tailwind.config.ts',
+  'tsconfig.json',
+  'vite.config.ts',
+]);
+const SOURCE_CODE_EXTENSIONS = new Set([
+  '.cjs',
+  '.js',
+  '.mjs',
+  '.ts',
+  '.tsx',
+]);
+const TEST_PATH_PATTERN =
+  /(?:^|\/)(?:e2e|fixtures?|tests?|__tests__|__mocks__)(?:\/|$)|\.(?:spec|test)\.[^.]+$/i;
 
 function isBinary(content: Buffer) {
   return content.includes(0);
@@ -24,6 +69,21 @@ function isBinary(content: Buffer) {
 
 function toRepositoryPath(repositoryPath: string, filePath: string) {
   return relative(repositoryPath, filePath).split(sep).join('/');
+}
+
+function hasExtension(path: string, extensions: Set<string>) {
+  return [...extensions].some((extension) => path.endsWith(extension));
+}
+
+function isAnalysisCandidateFile(repositoryPath: string) {
+  const normalizedPath = repositoryPath.replaceAll('\\', '/');
+  const fileName = normalizedPath.split('/').at(-1) ?? '';
+
+  if (ROOT_CONFIGURATION_FILES.has(fileName)) return true;
+  if (TEST_PATH_PATTERN.test(normalizedPath)) return false;
+  if (hasExtension(normalizedPath, FRONTEND_EXTENSIONS)) return true;
+
+  return hasExtension(normalizedPath, SOURCE_CODE_EXTENSIONS);
 }
 
 function cleanPathCandidate(value: string) {
@@ -119,8 +179,11 @@ async function collectFiles(
     const content = await readFile(filePath);
     if (isBinary(content)) continue;
 
+    const repositoryFilePath = toRepositoryPath(repositoryPath, filePath);
+    if (!isAnalysisCandidateFile(repositoryFilePath)) continue;
+
     files.push({
-      path: toRepositoryPath(repositoryPath, filePath),
+      path: repositoryFilePath,
       content: content.toString('utf8'),
     });
   }

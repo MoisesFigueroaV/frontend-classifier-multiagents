@@ -7,6 +7,7 @@ import { askUserTool } from '@mastra/core/tools';
 import { LocalFilesystem, LocalSandbox, WORKSPACE_TOOLS, Workspace } from '@mastra/core/workspace';
 import { Memory } from '@mastra/memory';
 
+import { agentModel, usesGoogleNativeTools } from '../lib/model-provider';
 import { webFetchTool } from '../tools/web-fetch-tool';
 import { startScheduleTool, stopScheduleTool } from '../tools/schedule-tools';
 
@@ -49,7 +50,7 @@ Ask concise questions when something is unclear or a good question could surface
 
 For local file changes, end with a plain-text URL using ${pathToFileURL(`${workspacePath}/`).href}; avoid Markdown links, localhost, /workspace, relative paths, and static-file servers.
 `,
-  model: 'google/gemini-3.5-flash',
+  model: agentModel,
   defaultOptions: {
     maxSteps: 100,
     autoResumeSuspendedTools: true,
@@ -58,7 +59,7 @@ For local file changes, end with a plain-text URL using ${pathToFileURL(`${works
     options: {
       generateTitle: true,
       observationalMemory: {
-        model: 'google/gemini-3.5-flash',
+        model: agentModel,
       },
     },
   }),
@@ -68,7 +69,9 @@ For local file changes, end with a plain-text URL using ${pathToFileURL(`${works
     start_schedule: startScheduleTool,
     stop_schedule: stopScheduleTool,
     web_fetch: webFetchTool,
-    web_search: google.tools.googleSearch({}),
+    ...(usesGoogleNativeTools
+      ? { web_search: google.tools.googleSearch({}) }
+      : {}),
   },
   signals: [new TaskSignalProvider()],
 });
