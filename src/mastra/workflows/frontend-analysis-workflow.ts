@@ -28,6 +28,12 @@ import {
   normalizeComponentAnalysis,
   validateComponentGrounding,
 } from '../lib/component-grounding';
+import {
+  buildMotionGroundingRepairPrompt,
+  extractMotionGroundingCandidates,
+  validateMotionGrounding,
+} from '../lib/motion-grounding';
+import { normalizeLayoutAnalysis } from '../lib/layout-grounding';
 
 import { extractColorThemeTool } from '../tools/extract-color-theme-tool';
 import { extractTypographyTool } from '../tools/extract-typography-tool';
@@ -192,7 +198,7 @@ const toolObserve = {
   ) => undefined,
 };
 
-function buildAnalysisFiles(
+export function buildAnalysisFiles(
   files: Array<{ path: string; content: string }>,
 ) {
   let remaining = MAX_ANALYSIS_CONTEXT_CHARS;
@@ -210,7 +216,7 @@ function buildAnalysisFiles(
   });
 }
 
-function prioritizeAnalysisFiles(
+export function prioritizeAnalysisFiles(
   files: Array<{ path: string; content: string }>,
   projectContext: z.infer<typeof projectContextSchema>,
 ) {
@@ -416,6 +422,7 @@ const specialistAnalysesStep = createStep({
     const componentGrounding = extractComponentGroundingCandidates(
       componentEvidence,
     );
+    const motionGrounding = extractMotionGroundingCandidates(motionEvidence);
 
     const logPromptMetrics = (specialist: string, evidence: typeof visualEvidence, prompt: string) => {
       const metrics = contextMetrics(evidence);
@@ -448,6 +455,7 @@ const specialistAnalysesStep = createStep({
     const motionPrompt = buildMotionSpecialistPrompt({
       projectContext: inputData.projectContext,
       evidence: motionEvidence,
+      groundedCandidates: motionGrounding,
     });
 
     logPromptMetrics('visual-style', visualEvidence, visualPrompt);
@@ -455,7 +463,7 @@ const specialistAnalysesStep = createStep({
     logPromptMetrics('layout', layoutEvidence, layoutPrompt);
     logPromptMetrics('motion', motionEvidence, motionPrompt);
     console.info(
-      `[frontend-analysis] visual payload breakdown:\n- project metadata: ${visualPayloadBreakdown.projectMetadata.toString()} chars\n- typography: ${visualPayloadBreakdown.typography.toString()} chars\n- colors: ${visualPayloadBreakdown.colors.toString()} chars\n- cssVariables: ${visualPayloadBreakdown.cssVariables.toString()} chars\n- gradients: ${visualPayloadBreakdown.gradients.toString()} chars\n- color evidence: ${visualPayloadBreakdown.colorEvidence.toString()} chars\n- selected visual files: ${visualPayloadBreakdown.selectedVisualFiles.toString()} chars\n- JSON structure: ${visualPayloadBreakdown.structuralJsonOverhead.toString()} chars\n- total serialized prompt: ${visualPayloadBreakdown.totalSerializedPrompt.toString()} chars`,
+      `[frontend-analysis] VISUAL BEFORE\n- colors chars: ${visualPayloadBreakdown.before.colors.toString()}\n- cssVariables chars: ${visualPayloadBreakdown.before.cssVariables.toString()}\n- typography chars: ${visualPayloadBreakdown.before.typography.toString()}\n- evidence chars: ${visualPayloadBreakdown.before.evidence.toString()}\n- total chars: ${visualPayloadBreakdown.before.total.toString()}\n[frontend-analysis] VISUAL AFTER\n- compact colors chars: ${visualPayloadBreakdown.after.compactColors.toString()}\n- compact cssVariables chars: ${visualPayloadBreakdown.after.compactCssVariables.toString()}\n- typography chars: ${visualPayloadBreakdown.after.typography.toString()}\n- evidence chars: ${visualPayloadBreakdown.after.evidence.toString()}\n- total chars: ${visualPayloadBreakdown.after.total.toString()}`,
     );
 
     const visualStyleResult = await generateWithSingleStructuredRepair(
@@ -555,6 +563,26 @@ const specialistAnalysesStep = createStep({
           },
         }),
       motionPrompt,
+      (object) => {
+        const parsed = motionAnalysisSchema.safeParse(object);
+        if (!parsed.success) return undefined;
+
+        const validation = validateMotionGrounding(parsed.data, motionGrounding);
+        if (validation.valid) return undefined;
+
+        const unsupported = Object.entries(validation.unsupported)
+          .filter(([, values]) => values.length > 0)
+          .map(([field, values]) => `${field}: ${values.join(', ')}`)
+          .join(' | ');
+        return {
+          message: unsupported,
+          repairPrompt: buildMotionGroundingRepairPrompt(
+            object,
+            validation,
+            motionGrounding,
+          ),
+        };
+      },
     );
     recordTokenUsage(requestContext, 'motion', motionResult);
     if (!motionResult.object) {
@@ -568,7 +596,10 @@ const specialistAnalysesStep = createStep({
       'component-analysis': normalizeComponentAnalysis(
         componentAnalysisSchema.parse(componentResult.object),
       ),
-      'layout-analysis': layoutAnalysisSchema.parse(layoutResult.object),
+      'layout-analysis': normalizeLayoutAnalysis(
+        layoutAnalysisSchema.parse(layoutResult.object),
+        layoutEvidence,
+      ),
       'motion-analysis': motionAnalysisSchema.parse(motionResult.object),
     };
   },

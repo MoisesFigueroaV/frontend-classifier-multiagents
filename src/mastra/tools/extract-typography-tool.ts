@@ -37,6 +37,17 @@ function cleanFontFamily(value: string) {
     .filter(Boolean);
 }
 
+function fontFamilyFromPackage(value: string) {
+  return value
+    .replace(/^@fontsource(?:-variable)?\//, '')
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.toLowerCase() === 'jetbrains'
+      ? 'JetBrains'
+      : `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+}
+
 export const extractTypographyTool = createTool({
   id: 'extract-typography',
 
@@ -129,6 +140,41 @@ export const extractTypographyTool = createTool({
         });
 
         fontFamilies.add(family);
+      }
+
+      // CSS font tokens, e.g. --font-sans: "Geist", ui-sans-serif.
+      // They are deterministic declarations, unlike a bare var(--font-sans)
+      // reference which does not reveal the actual family.
+      for (const match of content.matchAll(/--font-[\w-]+\s*:\s*([^;}\n]+)/gi)) {
+        for (const family of cleanFontFamily(match[1] ?? '')) {
+          if (/^(?:var\(|ui-|system-ui|sans-serif|serif|monospace)/i.test(family)) continue;
+          fontFamilies.add(family);
+          evidence.push({
+            value: family,
+            property: 'font-token',
+            source: file.path,
+          });
+        }
+      }
+
+      // next/font/google imports make the font choice explicit in source.
+      for (const match of content.matchAll(/import\s*{([^}]+)}\s*from\s*["']next\/font\/google["']/g)) {
+        for (const imported of (match[1] ?? '').split(',')) {
+          const family = imported.trim().split(/\s+as\s+/i)[0]?.replace(/_/g, ' ').trim();
+          if (!family) continue;
+          fontFamilies.add(family);
+          declaredFonts.push({ family, source: file.path });
+          evidence.push({ value: family, property: 'next/font/google import', source: file.path });
+        }
+      }
+
+      // @fontsource packages are explicit package/import declarations.
+      for (const match of content.matchAll(/(?:@import\s*|from\s*)["'](@fontsource(?:-variable)?\/[^"']+)["']/g)) {
+        const family = fontFamilyFromPackage(match[1] ?? '');
+        if (!family) continue;
+        fontFamilies.add(family);
+        declaredFonts.push({ family, source: file.path });
+        evidence.push({ value: family, property: 'fontsource import', source: file.path });
       }
     }
 

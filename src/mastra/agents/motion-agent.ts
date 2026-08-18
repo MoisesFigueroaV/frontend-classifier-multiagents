@@ -2,6 +2,7 @@
 
 import { Agent } from '@mastra/core/agent';
 import { agentModel } from '../lib/model-provider';
+import { motionNoEvidenceFallback } from '../lib/motion-grounding';
 
 export const motionAgent = new Agent({
   id: 'motion-agent',
@@ -115,6 +116,21 @@ do not estimate it.
 
 Every important conclusion should reference one or more source files.
 
+The prompt includes observedCandidates extracted deterministically from the
+repository evidence. For durations, easings, hover effects, entrance and exit
+effects, micro-interactions, transforms, and scroll effects, return only values
+contained in observedCandidates. A motion library import alone is never evidence
+of an animation or interaction effect.
+
+AnimatePresence import or usage proves only that AnimatePresence is present.
+It does not prove a visible transition, motion intensity, consistency, or a
+recurring design pattern. Likewise, an AnimatedGridPattern name or an installed
+motion package does not prove animation behavior unless its supplied evidence
+contains a concrete configuration. When observedCandidates contains no concrete
+duration, easing, interaction, transform, keyframe, animation class, or derived
+effect, return motionIntensity "none", consistency "low", motionStyle [], and
+patterns []. You may record the import/usage as a factual evidence item only.
+
 Your responsibility is ONLY motion and interaction analysis.
 
 Do not:
@@ -134,6 +150,13 @@ outside it: transitionDurations { commonValues, dominantRange }; easing
 microInteractions; transformPatterns; scrollEffects; motionIntensity; motionStyle;
 consistency; patterns [{ name, description }]; evidence [{ observation, sources }];
 and a mandatory non-empty reasoningSummary. Never omit a field.
+
+When there are no observed duration values, return transitionDurations as
+{ commonValues: [], dominantRange: "${motionNoEvidenceFallback.dominantRange}" }. When there are
+no observed easing values, return easing as
+{ commonValues: [], dominantStyle: "${motionNoEvidenceFallback.dominantStyle}" }. Never return an empty
+string for a required field; these exact sentinels represent legitimate absence
+of evidence and do not justify inventing a timing or easing value.
 `,
 
   model: agentModel,

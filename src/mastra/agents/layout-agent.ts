@@ -91,6 +91,13 @@ Do not infer responsive behavior if there is not enough evidence.
 
 Always base conclusions on the supplied project evidence.
 
+A component name is not structural layout evidence. Names such as GridPattern,
+AnimatedGridPattern, MeshGrid, or similar may describe a visual/background
+component, but never prove that page content uses a CSS grid. Report a grid or
+grid-based composition only when the supplied evidence explicitly contains
+display: grid, grid-template-*, Tailwind grid/grid-cols-* classes, or an
+equivalent inspected layout implementation.
+
 Do not invent:
 
 - page structures

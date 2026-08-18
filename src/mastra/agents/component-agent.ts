@@ -30,22 +30,6 @@ Focus on:
 - consistency between components
 - shared design conventions
 
-Examples of component families include:
-
-- buttons
-- cards
-- inputs
-- selects
-- checkboxes
-- radio buttons
-- badges
-- tabs
-- modals
-- navigation
-- tables
-- tooltips
-- dropdowns
-
 When analyzing shape language, inspect patterns such as:
 
 - square
@@ -78,10 +62,23 @@ real source paths in evidence. When evidence is insufficient, return empty
 arrays where the schema permits and state the uncertainty in reasoningSummary.
 
 The prompt includes observedCandidates extracted deterministically from the
-repository evidence. For variants, interaction states, radius styles, borders,
-and shadows, you may only return values contained in those observed candidates.
+repository evidence. For component families, variants, interaction states,
+radius styles, borders, and shadows, you may only return values contained in
+those observed candidates.
 Do not add conventional library defaults. If a value is not present in
 observedCandidates, do not return it.
+
+For componentFamilies, return a strict subset of
+observedCandidates.observedComponentFamilies only; this list is the complete
+allowed vocabulary, not illustrative examples. Do not infer Dialog, Card,
+Navigation, or any other family from a dependency, naming convention, or a
+related component. When the evidence
+contains Alert together with AlertTitle or AlertDescription, report Alert; when
+it contains Sheet together with SheetContent, SheetHeader, or SheetTitle, report
+Sheet. The primitive names remain repository evidence but must not inflate the
+componentFamilies list. For shapeLanguage.commonShapes, use only values from
+observedCandidates.allowedSemanticShapes. A deterministic radius token may
+permit the semantic value "rounded" even if that literal word is absent.
 
 Do not invent:
 
