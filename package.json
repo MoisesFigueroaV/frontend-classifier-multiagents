@@ -8,7 +8,8 @@
     "dev": "mastra dev",
     "build": "mastra build",
     "start": "mastra start",
-    "analyze": "bun src/cli/index.ts"
+    "analyze": "bun src/cli/index.ts",
+    "evidence:preflight": "bun src/cli/debug-evidence-selection.ts"
   },
   "keywords": [],
   "author": "",

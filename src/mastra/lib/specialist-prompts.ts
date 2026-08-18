@@ -3,6 +3,7 @@ import type { z } from 'zod';
 import type { colorThemeAnalysisSchema, typographyAnalysisSchema } from '../schemas/frontend-classification';
 import type { projectContextSchema } from '../schemas/project-context';
 import type { EvidenceFile } from './evidence-routing';
+import type { ComponentGroundingCandidates } from './component-grounding';
 
 type ProjectContext = z.infer<typeof projectContextSchema>;
 type Typography = z.infer<typeof typographyAnalysisSchema>;
@@ -123,6 +124,7 @@ export function buildVisualSpecialistPrompt(input: {
 export function buildComponentSpecialistPrompt(input: {
   projectContext: ProjectContext;
   evidence: EvidenceFile[];
+  groundedCandidates: ComponentGroundingCandidates;
 }) {
   return JSON.stringify({
     project: projectMetadata(input.projectContext),
@@ -130,6 +132,7 @@ export function buildComponentSpecialistPrompt(input: {
       ui: input.projectContext.libraries.ui,
       styling: input.projectContext.libraries.styling,
     },
+    observedCandidates: input.groundedCandidates,
     evidence: input.evidence,
   });
 }

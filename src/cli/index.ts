@@ -86,23 +86,45 @@ async function main() {
   outputStream.write(`\n${formatTokenUsageSummary(analysisRun.tokenUsage)}\n`);
 
   const selectedArtifacts = await selectArtifacts(readline);
-  const defaultDirectory = resolve(process.cwd(), 'artifacts', snapshot.projectName);
+  const defaultDirectory = resolve(process.cwd(), 'artifacts');
   const outputDirectory = await selectOutputDirectory(readline, {
     defaultDirectory,
-    repositoryDirectory,
+    repositoryArtifactsDirectory: resolve(repositoryDirectory, 'artifacts'),
   });
   readline.close();
 
   const artifacts = selectedArtifacts.map((kind) =>
     artifactBuilders[kind](result.result),
   );
-  const writeResult = await writeArtifacts(outputDirectory, artifacts);
+  const writeResult = await writeArtifacts(
+    {
+      destinationDirectory: outputDirectory,
+      projectName: snapshot.projectName,
+      sourcePath: repositoryDirectory,
+    },
+    artifacts,
+  );
+
+  if (writeResult.runDirectory) {
+    outputStream.write(`\n✓ Run guardado en:\n  ${writeResult.runDirectory}\n`);
+  }
 
   if (writeResult.created.length > 0) {
-    outputStream.write('\n✓ Archivos creados:\n');
+    outputStream.write('\n✓ Archivos del run:\n');
     for (const filePath of writeResult.created) {
       outputStream.write(`  ${filePath}\n`);
     }
+  }
+
+  if (writeResult.latestUpdated.length > 0) {
+    outputStream.write('\n✓ Latest actualizado:\n');
+    for (const filePath of writeResult.latestUpdated) {
+      outputStream.write(`  ${filePath}\n`);
+    }
+  }
+
+  if (writeResult.metadataPath) {
+    outputStream.write(`\n✓ Metadata:\n  ${writeResult.metadataPath}\n`);
   }
 
   if (writeResult.failed.length > 0) {

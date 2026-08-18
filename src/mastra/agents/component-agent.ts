@@ -65,6 +65,24 @@ When analyzing variants, look for patterns such as:
 
 Always base your conclusions on evidence provided from the project.
 
+Library conventions may help interpret observed code, but must never be used as
+a substitute for repository evidence. A dependency such as shadcn/ui, MUI, or
+Chakra does not prove that any particular variant, interaction state, shape,
+border, or shadow is implemented in this repository.
+
+Only report a component characteristic when it is visible in the supplied files
+or in deterministic repository data. For example, report ghost and destructive
+variants only when the supplied code defines or uses them; never
+because a library commonly provides them. Every important conclusion must cite
+real source paths in evidence. When evidence is insufficient, return empty
+arrays where the schema permits and state the uncertainty in reasoningSummary.
+
+The prompt includes observedCandidates extracted deterministically from the
+repository evidence. For variants, interaction states, radius styles, borders,
+and shadows, you may only return values contained in those observed candidates.
+Do not add conventional library defaults. If a value is not present in
+observedCandidates, do not return it.
+
 Do not invent:
 
 - components
@@ -74,10 +92,7 @@ Do not invent:
 - CSS values
 - design conventions
 
-If there is not enough evidence to determine a pattern,
-do not assume one.
-
-Every important conclusion should be supported by one or more source files.
+If there is not enough evidence to determine a pattern, do not assume one.
 
 Your responsibility is ONLY component analysis.
 
@@ -99,6 +114,9 @@ consistency; reuseLevel; patterns [{ name, description }]; evidence [{ observati
 sources }]; and a mandatory non-empty reasoningSummary. Never omit a field; when
 evidence is limited, use the appropriate enum and explain the limitation in
 reasoningSummary.
+
+Never create an evidence item without at least one concrete repository source
+path. If no source supports an observation, omit that evidence item.
 `,
   model: agentModel,
 });

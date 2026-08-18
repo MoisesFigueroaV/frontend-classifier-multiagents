@@ -22,6 +22,12 @@ import {
   getVisualPayloadBreakdown,
 } from '../lib/specialist-prompts';
 import { recordTokenUsage } from '../lib/token-usage';
+import {
+  buildComponentGroundingRepairPrompt,
+  extractComponentGroundingCandidates,
+  normalizeComponentAnalysis,
+  validateComponentGrounding,
+} from '../lib/component-grounding';
 
 import { extractColorThemeTool } from '../tools/extract-color-theme-tool';
 import { extractTypographyTool } from '../tools/extract-typography-tool';
@@ -111,30 +117,66 @@ function safeStructuredObjectLog(value: Record<string, unknown>) {
     : `${serialized.slice(0, maxCharacters)}…[truncated]`;
 }
 
-async function generateWithSingleStructuredRepair<TResult>(
+function asRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+type SemanticValidationFailure = {
+  message: string;
+  repairPrompt: string;
+};
+
+async function generateWithSingleStructuredRepair<TResult extends { object?: unknown }>(
   agentName: string,
   generate: (prompt: string) => Promise<TResult>,
   prompt: string,
+  validateSemanticOutput?: (
+    object: Record<string, unknown>,
+  ) => SemanticValidationFailure | undefined,
 ) {
-  try {
-    return await generate(prompt);
-  } catch (error: unknown) {
-    const invalidObject = readInvalidStructuredObject(error);
-    const issues = readStructuredOutputIssues(error);
+  let nextPrompt = prompt;
+  let repairAttempted = false;
 
-    if (!invalidObject) throw error;
+  while (true) {
+    let result: TResult;
+    try {
+      result = await generate(nextPrompt);
+    } catch (error: unknown) {
+      const invalidObject = readInvalidStructuredObject(error);
+      const issues = readStructuredOutputIssues(error);
+
+      if (!invalidObject || repairAttempted) throw error;
+
+      console.warn(
+        `[frontend-analysis] ${agentName}: structured output invalid; fields received: ${Object.keys(invalidObject).join(', ') || '(none)'}; issues: ${issues.map((issue) => `${issue.path}: ${issue.message}`).join(' | ')}`,
+      );
+      console.warn(
+        `[frontend-analysis] ${agentName}: invalid structured object: ${safeStructuredObjectLog(invalidObject)}`,
+      );
+      console.info(`[frontend-analysis] ${agentName}: attempting one structured output repair`);
+      repairAttempted = true;
+      nextPrompt = buildStructuredOutputRepairPrompt(agentName, invalidObject, issues);
+      continue;
+    }
+
+    const object = asRecord(result.object);
+    const semanticFailure = object && validateSemanticOutput?.(object);
+    if (!semanticFailure) return result;
 
     console.warn(
-      `[frontend-analysis] ${agentName}: structured output invalid; fields received: ${Object.keys(invalidObject).join(', ') || '(none)'}; issues: ${issues.map((issue) => `${issue.path}: ${issue.message}`).join(' | ')}`,
+      `[frontend-analysis] ${agentName}: semantic grounding rejected: ${semanticFailure.message}`,
     );
-    console.warn(
-      `[frontend-analysis] ${agentName}: invalid structured object: ${safeStructuredObjectLog(invalidObject)}`,
-    );
-    console.info(`[frontend-analysis] ${agentName}: attempting one structured output repair`);
+    if (repairAttempted) {
+      throw new Error(
+        `${agentName} semantic grounding remained invalid after the single allowed repair: ${semanticFailure.message}`,
+      );
+    }
 
-    return generate(
-      buildStructuredOutputRepairPrompt(agentName, invalidObject, issues),
-    );
+    console.info(`[frontend-analysis] ${agentName}: attempting one semantic grounding repair`);
+    repairAttempted = true;
+    nextPrompt = semanticFailure.repairPrompt;
   }
 }
 
@@ -371,6 +413,9 @@ const specialistAnalysesStep = createStep({
         ? { providerOptions: deepSeekThinkingDisabled }
         : {}),
     };
+    const componentGrounding = extractComponentGroundingCandidates(
+      componentEvidence,
+    );
 
     const logPromptMetrics = (specialist: string, evidence: typeof visualEvidence, prompt: string) => {
       const metrics = contextMetrics(evidence);
@@ -394,6 +439,7 @@ const specialistAnalysesStep = createStep({
     const componentPrompt = buildComponentSpecialistPrompt({
       projectContext: inputData.projectContext,
       evidence: componentEvidence,
+      groundedCandidates: componentGrounding,
     });
     const layoutPrompt = buildLayoutSpecialistPrompt({
       projectContext: inputData.projectContext,
@@ -446,6 +492,29 @@ const specialistAnalysesStep = createStep({
           },
         }),
       componentPrompt,
+      (object) => {
+        const parsed = componentAnalysisSchema.safeParse(object);
+        if (!parsed.success) return undefined;
+
+        const validation = validateComponentGrounding(
+          parsed.data,
+          componentGrounding,
+        );
+        if (validation.valid) return undefined;
+
+        const unsupported = Object.entries(validation.unsupported)
+          .filter(([, values]) => values.length > 0)
+          .map(([field, values]) => `${field}: ${values.join(', ')}`)
+          .join(' | ');
+        return {
+          message: unsupported,
+          repairPrompt: buildComponentGroundingRepairPrompt(
+            object,
+            validation,
+            componentGrounding,
+          ),
+        };
+      },
     );
     recordTokenUsage(requestContext, 'components', componentResult);
     if (!componentResult.object) {
@@ -496,7 +565,9 @@ const specialistAnalysesStep = createStep({
       'visual-style-analysis': visualStyleAnalysisSchema.parse(
         visualStyleResult.object,
       ),
-      'component-analysis': componentAnalysisSchema.parse(componentResult.object),
+      'component-analysis': normalizeComponentAnalysis(
+        componentAnalysisSchema.parse(componentResult.object),
+      ),
       'layout-analysis': layoutAnalysisSchema.parse(layoutResult.object),
       'motion-analysis': motionAnalysisSchema.parse(motionResult.object),
     };
